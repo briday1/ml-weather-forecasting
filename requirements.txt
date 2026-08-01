@@ -1,0 +1,5 @@
+numpy>=1.24
+plotly>=5.20
+requests>=2.31
+torch>=2.2
+nexrad-viewer @ git+https://github.com/briday1/nexrad-viewer.git@v0.3.4

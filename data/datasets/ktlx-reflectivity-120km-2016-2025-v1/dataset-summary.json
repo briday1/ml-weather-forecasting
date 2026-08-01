@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "identifier": "ktlx-reflectivity-120km-2016-2025-v1",
+  "title": "KTLX reflectivity \u00b7 1,000 datetime sequences \u00b7 2016\u20132025",
+  "description": "One thousand reproducibly selected KTLX datetime examples across ten years. Each example contains 30 consecutive unique native N0B scans spanning 45\u201390 minutes within 120 km of the radar.",
+  "site": "KTLX",
+  "product": "N0B",
+  "start_date": "2016-01-01",
+  "end_date": "2025-12-31",
+  "first_timestamp": "2022-02-22T02:01:12+00:00",
+  "examples": 1000,
+  "training": 800,
+  "validation": 200,
+  "frames_per_example": 30,
+  "radius_km": 120.0,
+  "local_coverage": 100.0
+}

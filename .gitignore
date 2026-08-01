@@ -1,0 +1,15 @@
+.DS_Store
+.pytest_cache/
+.ruff_cache/
+.venv/
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.py[cod]
+
+# Native radar scans and generated artifacts stay local. Dataset manifests and
+# CSV indexes under data/datasets remain small, reviewable, and reproducible.
+data/lake/
+data/datasets/**/tensors/
+outputs/
