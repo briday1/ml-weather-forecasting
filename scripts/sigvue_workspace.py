@@ -546,8 +546,23 @@ class ComparisonGifBatch(Batch[Comparison]):
         self.frame_duration_ms = frame_duration_ms
 
     def _filename(self, resource: DataResource) -> str:
-        slug = re.sub(r"[^a-z0-9]+", "-", resource.identifier.lower()).strip("-")
+        slug = re.sub(r"[^a-z0-9]+", "-", resource.source.label.lower()).strip("-")
         return f"{slug}-side-by-side.gif"
+
+    @staticmethod
+    def _radius_directory(resource: DataResource) -> str:
+        return f"{resource.source.radius_km:g}km"
+
+    @staticmethod
+    def _category_directory(resource: DataResource) -> str:
+        return "embedding" if resource.source.kind == EMBEDDING else "forecasting"
+
+    def _relative_path(self, resource: DataResource) -> Path:
+        return (
+            Path(self._radius_directory(resource))
+            / self._category_directory(resource)
+            / self._filename(resource)
+        )
 
     @staticmethod
     def _selected(resources, action):
@@ -558,7 +573,11 @@ class ComparisonGifBatch(Batch[Comparison]):
 
     def item_destination(self, resource, request):
         return BatchDestination(
-            self.output_root, (self._filename(resource),), "Side-by-side GIF is ready"
+            self.output_root
+            / self._radius_directory(resource)
+            / self._category_directory(resource),
+            (self._filename(resource),),
+            "Side-by-side GIF is ready",
         )
 
     def workspace_destination(self, resources, request):
@@ -570,7 +589,7 @@ class ComparisonGifBatch(Batch[Comparison]):
         }
         return BatchDestination(
             self.output_root,
-            tuple(self._filename(resource) for resource in selected),
+            tuple(sorted({self._radius_directory(resource) for resource in selected})),
             summaries[request.action],
         )
 
@@ -589,7 +608,7 @@ class ComparisonGifBatch(Batch[Comparison]):
             selected,
             lambda resource: render_comparison_gif(
                 open_resource(resource),
-                directory / self._filename(resource),
+                directory / self._relative_path(resource),
                 frame_duration_ms=self.frame_duration_ms,
                 cancel=request.raise_if_cancelled,
             ),
