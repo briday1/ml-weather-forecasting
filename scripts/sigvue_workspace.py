@@ -16,6 +16,7 @@ import numpy as np
 import plotly.graph_objects as go
 import torch
 from PIL import Image, ImageDraw, ImageFont
+from plotly import colors as plotly_colors
 from plotly.colors import sample_colorscale
 from plotly.subplots import make_subplots
 from sigvue import (
@@ -52,7 +53,29 @@ RENDER_GIF = "render-side-by-side-gif"
 RENDER_ALL_EMBEDDINGS = "render-all-embedding-gifs"
 RENDER_ALL_VALIDATION = "render-all-validation-gifs"
 RENDER_ALL = "render-all-gifs"
+NEXRAD_COLORSCALE = (
+    (0.00, "#646464"),
+    (0.15, "#04e9e7"),
+    (0.28, "#019ff4"),
+    (0.40, "#0300f4"),
+    (0.48, "#02fd02"),
+    (0.58, "#01c501"),
+    (0.66, "#008e00"),
+    (0.72, "#fdf802"),
+    (0.78, "#e5bc00"),
+    (0.84, "#fd9500"),
+    (0.89, "#fd0000"),
+    (0.94, "#d40000"),
+    (0.97, "#bc0000"),
+    (1.00, "#f800fd"),
+)
+plotly_colors.sequential.NEXRAD = plotly_colors.sample_colorscale(
+    [list(stop) for stop in NEXRAD_COLORSCALE],
+    [index / 100 for index in range(101)],
+    colortype="rgb",
+)
 REFLECTIVITY_COLORMAPS = (
+    "NEXRAD",
     "Turbo",
     "Viridis",
     "Cividis",
@@ -298,7 +321,7 @@ def _read_frame(comparison: Comparison, segment: Segment) -> ComparisonFrame:
 def comparison_figure(
     frame: ComparisonFrame,
     theme: str = "dark",
-    colormap: str = "Turbo",
+    colormap: str = "NEXRAD",
     limits: tuple[float, float] = (LOWER_DBZ, UPPER_DBZ),
 ) -> go.Figure:
     comparison, index = frame.comparison, frame.index
@@ -371,7 +394,7 @@ def view(frame: ComparisonFrame, ui: UI) -> None:
     colormap = ui.colormap(
         "reflectivity_colormap",
         label="Colormap",
-        default="Turbo",
+        default="NEXRAD",
         options=REFLECTIVITY_COLORMAPS,
         group="Reflectivity display",
     )
@@ -416,8 +439,12 @@ def _font(size: int):
 
 
 @lru_cache(maxsize=1)
-def _turbo_rgb() -> np.ndarray:
-    colors = sample_colorscale("Turbo", np.linspace(0, 1, 256), colortype="rgb")
+def _nexrad_rgb() -> np.ndarray:
+    colors = sample_colorscale(
+        [list(stop) for stop in NEXRAD_COLORSCALE],
+        np.linspace(0, 1, 256),
+        colortype="rgb",
+    )
     return np.asarray(
         [
             [
@@ -440,7 +467,7 @@ def _radar_image(values: np.ndarray, size: int = 512) -> Image.Image:
         )
         * 255
     ).astype(np.uint8)
-    image = Image.fromarray(_turbo_rgb()[indexes], mode="RGB")
+    image = Image.fromarray(_nexrad_rgb()[indexes], mode="RGB")
     return image.resize((size, size), Image.Resampling.NEAREST)
 
 
