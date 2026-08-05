@@ -1,5 +1,6 @@
 """Stage 2 — learn and verify the Cartesian spatial representation."""
 
+import os
 import random
 from pathlib import Path
 
@@ -16,17 +17,17 @@ from forecast import (
 from model import ForecastModel
 
 DATASET = Path("data/datasets/ktlx-reflectivity-120km-2016-2025-v1")
-AUTOENCODER = Path("outputs/autoencoder.pt")
+AUTOENCODER = Path(os.environ.get("ML_WEATHER_AUTOENCODER", "outputs/autoencoder.pt"))
 INPUT_FRAMES = 25
 EMBEDDING_CHANNELS = 48
 MOTION_SKIP = 2
 MOTION_CHANNELS = 32
-EPOCHS = 15
+EPOCHS = int(os.environ.get("ML_WEATHER_EMBEDDING_EPOCHS", "15"))
 BATCH_SIZE = 8
 LEARNING_RATE = 0.001
 SEED = 20260729
 LIMIT = None
-DEVICE = "auto"
+DEVICE = os.environ.get("ML_WEATHER_DEVICE", "auto")
 
 random.seed(SEED)
 np.random.seed(SEED)

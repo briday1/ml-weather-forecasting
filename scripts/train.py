@@ -1,5 +1,6 @@
 """Stage 3 — freeze the embedding model and train future prediction only."""
 
+import os
 import random
 from pathlib import Path
 
@@ -16,12 +17,12 @@ from forecast import (
 from model import ForecastModel
 
 DATASET = Path("data/datasets/ktlx-reflectivity-120km-2016-2025-v1")
-AUTOENCODER = Path("outputs/autoencoder.pt")
-MODEL = Path("outputs/model.pt")
-EPOCHS = 15
+AUTOENCODER = Path(os.environ.get("ML_WEATHER_AUTOENCODER", "outputs/autoencoder.pt"))
+MODEL = Path(os.environ.get("ML_WEATHER_MODEL", "outputs/model.pt"))
+EPOCHS = int(os.environ.get("ML_WEATHER_FORECAST_EPOCHS", "15"))
 BATCH_SIZE = 8
 LEARNING_RATE = 0.001
-DEVICE = "auto"
+DEVICE = os.environ.get("ML_WEATHER_DEVICE", "auto")
 
 device = choose_device(DEVICE)
 autoencoder = torch.load(AUTOENCODER, map_location=device, weights_only=False)
@@ -83,9 +84,7 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
 train_batches = loader(
     radar, split["train"], BATCH_SIZE, auxiliary=auxiliary, shuffle=True, seed=SEED
 )
-validation_batches = loader(
-    radar, split["validation"], BATCH_SIZE, auxiliary=auxiliary
-)
+validation_batches = loader(radar, split["validation"], BATCH_SIZE, auxiliary=auxiliary)
 train_losses, validation_losses = [], []
 best_validation, best_epoch, best_state = float("inf"), 0, None
 

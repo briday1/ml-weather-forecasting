@@ -1,6 +1,7 @@
 """Browse observed radar frames beside autoencoder reconstructions."""
 
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -17,10 +18,12 @@ from model import ForecastModel
 from radar_explorer import write_radar_comparison
 
 DATASET = Path("data/datasets/ktlx-reflectivity-120km-2016-2025-v1")
-AUTOENCODER = Path("outputs/autoencoder.pt")
-OUTPUT = Path("outputs/embedding-report.html")
+AUTOENCODER = Path(os.environ.get("ML_WEATHER_AUTOENCODER", "outputs/autoencoder.pt"))
+OUTPUT = Path(
+    os.environ.get("ML_WEATHER_EMBEDDING_REPORT", "outputs/embedding-report.html")
+)
 VALIDATION_EXAMPLES = 20
-DEVICE = "auto"
+DEVICE = os.environ.get("ML_WEATHER_DEVICE", "auto")
 
 device = choose_device(DEVICE)
 checkpoint = torch.load(AUTOENCODER, map_location=device, weights_only=False)
@@ -52,7 +55,9 @@ metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
 labels = [metadata["examples"][int(index)] for index in indexes]
 observed, reconstructed, details, maes = [], [], [], []
 for index in indexes:
-    example = torch.from_numpy(np.array(radar[int(index)], dtype=np.float32)).unsqueeze(0)
+    example = torch.from_numpy(np.array(radar[int(index)], dtype=np.float32)).unsqueeze(
+        0
+    )
     features, _, _ = sequence_tensors(example, checkpoint["input_frames"])
     with torch.inference_mode():
         reconstruction = model.reconstruct(features.to(device)).cpu()

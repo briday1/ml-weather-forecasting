@@ -7,7 +7,10 @@ from torch import Tensor, nn
 
 def _normalized_dbz_threshold(dbz: float) -> float:
     maximum_z = 10.0 ** (95.0 / 10.0)
-    return float(torch.log1p(torch.tensor(10.0 ** (dbz / 10.0))) / torch.log1p(torch.tensor(maximum_z)))
+    return float(
+        torch.log1p(torch.tensor(10.0 ** (dbz / 10.0)))
+        / torch.log1p(torch.tensor(maximum_z))
+    )
 
 
 class ConvGRUCell(nn.Module):
@@ -16,12 +19,8 @@ class ConvGRUCell(nn.Module):
     def __init__(self, input_channels: int, hidden_channels: int) -> None:
         super().__init__()
         combined = input_channels + hidden_channels
-        self.gates = nn.Conv2d(
-            combined, hidden_channels * 2, kernel_size=3, padding=1
-        )
-        self.candidate = nn.Conv2d(
-            combined, hidden_channels, kernel_size=3, padding=1
-        )
+        self.gates = nn.Conv2d(combined, hidden_channels * 2, kernel_size=3, padding=1)
+        self.candidate = nn.Conv2d(combined, hidden_channels, kernel_size=3, padding=1)
 
     def forward(self, value: Tensor, hidden: Tensor) -> Tensor:
         reset, update = torch.sigmoid(
@@ -172,7 +171,9 @@ class ForecastModel(nn.Module):
         """Return (batch, channel, time, latent-ray, latent-range)."""
         frames = observations.unsqueeze(2)
         batch, time, channels, rays, gates = frames.shape
-        encoded = self.frame_encoder(frames.reshape(batch * time, channels, rays, gates))
+        encoded = self.frame_encoder(
+            frames.reshape(batch * time, channels, rays, gates)
+        )
         _, latent_channels, latent_rays, latent_gates = encoded.shape
         return encoded.reshape(
             batch, time, latent_channels, latent_rays, latent_gates
@@ -189,15 +190,16 @@ class ForecastModel(nn.Module):
 
     def motion_differences(self, observations: Tensor) -> Tensor:
         return (
-            observations[:, self.motion_skip :]
-            - observations[:, : -self.motion_skip]
+            observations[:, self.motion_skip :] - observations[:, : -self.motion_skip]
         )
 
     def embed_motion(self, observations: Tensor) -> Tensor:
         """Return (batch, motion-channel, time, latent-y, latent-x)."""
         differences = self.motion_differences(observations)
         batch, time, height, width = differences.shape
-        encoded = self.motion_encoder(differences.reshape(batch * time, 1, height, width))
+        encoded = self.motion_encoder(
+            differences.reshape(batch * time, 1, height, width)
+        )
         return encoded.reshape(
             batch, time, encoded.shape[1], encoded.shape[2], encoded.shape[3]
         ).permute(0, 2, 1, 3, 4)
@@ -217,14 +219,15 @@ class ForecastModel(nn.Module):
         return self.decode(self.embed(observations))
 
     def evolve(self, embedding: Tensor) -> Tensor:
-        raise RuntimeError("Use evolve_from_observations so motion is encoded explicitly")
+        raise RuntimeError(
+            "Use evolve_from_observations so motion is encoded explicitly"
+        )
 
     def evolve_from_observations(
         self, observations: Tensor, appearance: Tensor, auxiliary: Tensor
     ) -> Tensor:
         differences = (
-            appearance[:, :, self.motion_skip :]
-            - appearance[:, :, : -self.motion_skip]
+            appearance[:, :, self.motion_skip :] - appearance[:, :, : -self.motion_skip]
         )
         hidden = torch.zeros_like(differences[:, :, 0])
         cell = self.latent_dynamics["cell"]
@@ -256,8 +259,8 @@ class ForecastModel(nn.Module):
         future = []
         for _ in range(self.output_frames):
             hidden = cell(empty_difference, hidden)
-            previous_difference = (
-                previous_difference + self.latent_dynamics["delta"](hidden)
+            previous_difference = previous_difference + self.latent_dynamics["delta"](
+                hidden
             )
             previous = previous + previous_difference
             future.append(previous)
@@ -274,8 +277,7 @@ class ForecastModel(nn.Module):
         # At prototype resolution, allow up to eight grid cells of travel per
         # normal observed interval. Future cadence explicitly scales that move.
         cadence = (
-            auxiliary[:, 6 : 6 + self.output_frames]
-            / auxiliary[:, 5:6].clamp_min(0.1)
+            auxiliary[:, 6 : 6 + self.output_frames] / auxiliary[:, 5:6].clamp_min(0.1)
         ).clamp(0.25, 4.0)
         flows = flows * (8.0 * cadence[:, :, None, None, None])
         sources = 0.08 * torch.tanh(self.source_head(features))
@@ -293,14 +295,29 @@ class ForecastModel(nn.Module):
             # subtracting the learned forward flow transports echoes forward.
             flow = flows[:, frame]
             grid_offset = torch.stack(
-                (2.0 * flow[:, 0] / max(width - 1, 1),
-                 2.0 * flow[:, 1] / max(height - 1, 1)),
+                (
+                    2.0 * flow[:, 0] / max(width - 1, 1),
+                    2.0 * flow[:, 1] / max(height - 1, 1),
+                ),
                 dim=-1,
             )
-            advected = F.grid_sample(
-                last, base_grid - grid_offset, mode="bilinear",
-                padding_mode="zeros", align_corners=True,
+            sampled = F.grid_sample(
+                last,
+                base_grid - grid_offset,
+                mode="bilinear",
+                padding_mode="zeros",
+                align_corners=True,
             )
+            # Subtract grid_sample's finite-precision identity pass so exactly
+            # zero flow remains bit-for-bit persistence.
+            identity = F.grid_sample(
+                last,
+                base_grid,
+                mode="bilinear",
+                padding_mode="zeros",
+                align_corners=True,
+            )
+            advected = last + sampled - identity
             last = (advected + sources[:, frame : frame + 1]).clamp(0.0, 1.0)
             future.append(last[:, 0])
         return torch.stack(future, dim=1)

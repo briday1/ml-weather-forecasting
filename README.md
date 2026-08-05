@@ -12,14 +12,18 @@ Level III reflectivity. The workflow has four explicit stages:
 | Train predictor | `python scripts/train.py` | Freezes the embedding and learns future prediction |
 | Validate | `python scripts/validate.py` | Reports MAE and RMSE on the untouched test set |
 | Plot | `python scripts/plot.py` | Writes an interactive Plotly validation explorer |
+| Browse | `ml-weather-forecasting` | Opens every embedding and forecast validation result in SigVue |
 
 Each script has a short settings block at the top. Shared loading and model
 code lives in `scripts/forecast.py`; it is support code, not another workflow
 step.
 
-As a convenience, `python experiment.py` runs embedding training, writes
-`outputs/embedding-report.html`, trains prediction, validates it, and writes
-the forecast explorer. It expects the Cartesian tensor to already exist.
+As a convenience, `python experiment.py` runs isolated 120, 230, and 460 km
+experiments. For each radius it prepares a distinct 64×64 Cartesian tensor,
+trains a distinct embedding and forecast model, and writes distinct validation
+metrics beneath `outputs/radius-<N>km/`. The combined return value is also
+written to `outputs/experiment-results.json`. Edit `RADII_KM` in
+`experiment.py` to change the matrix.
 
 The actual PyTorch network is defined in `scripts/model.py`. It is a spatial
 encoder/decoder with an explicit learned embedding:
@@ -197,6 +201,39 @@ both linear-Z values and their `10·log10(error)` dBZ equivalents. It does not
 compute per-pixel errors in dBZ space.
 
 ## 5. Watch the learned forecast
+
+Install the project once, then launch its SigVue application:
+
+```bash
+pip install -e .
+ml-weather-forecasting
+```
+
+The browser groups results by data radius first, then exposes every held-out
+example under **Embeddings** for observed-versus-reconstructed frames and
+**Validation** for truth versus learned predictions. Completed radius runs are
+discovered from their `experiment.json` manifests. Select an item and use the frame
+playback controls to inspect it. Unlike the legacy self-contained HTML files,
+the SigVue application loads one selected result at a time, so the full
+validation split remains practical to browse.
+
+Each item has a **Render side-by-side GIF** batch action. The command-line
+equivalent is:
+
+```bash
+ml-weather-forecasting batch \
+  --workspace ml-weather-forecasting \
+  --item forecast-16 \
+  --action render-side-by-side-gif \
+  --output outputs/exported-gifs
+```
+
+Use `ml-weather-forecasting batch --list` to see the available item IDs. Batch
+GIFs loop forever and progress through the frames with observation/truth on the
+left and reconstruction/forecast on the right. The workspace-wide action
+renders the complete collection to `outputs/gifs`.
+
+### Legacy standalone explorer
 
 ```bash
 python scripts/plot.py

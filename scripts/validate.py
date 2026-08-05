@@ -1,12 +1,14 @@
 """Stage 3 — report final metrics on the untouched test split."""
 
+import json
+import os
 from pathlib import Path
 
 import torch
 from forecast import (
     choose_device,
-    load_checkpoint,
     load_auxiliary,
+    load_checkpoint,
     load_data,
     loader,
     normalized_to_linear_z,
@@ -14,9 +16,10 @@ from forecast import (
 )
 
 DATASET = Path("data/datasets/ktlx-reflectivity-120km-2016-2025-v1")
-MODEL = Path("outputs/model.pt")
+MODEL = Path(os.environ.get("ML_WEATHER_MODEL", "outputs/model.pt"))
+METRICS = Path(os.environ.get("ML_WEATHER_METRICS", "outputs/validation.json"))
 BATCH_SIZE = 8
-DEVICE = "auto"
+DEVICE = os.environ.get("ML_WEATHER_DEVICE", "auto")
 
 device = choose_device(DEVICE)
 checkpoint, model = load_checkpoint(MODEL, device)
@@ -66,10 +69,25 @@ def linear_z_to_dbz(value: float) -> float:
     return 10.0 * torch.log10(torch.tensor(max(value, 1e-12))).item()
 
 
+results = {
+    "forecast_mae_linear_z": forecast_mae_z,
+    "forecast_rmse_linear_z": forecast_rmse_z,
+    "forecast_mae_dbz_equivalent": linear_z_to_dbz(forecast_mae_z),
+    "forecast_rmse_dbz_equivalent": linear_z_to_dbz(forecast_rmse_z),
+    "reconstruction_mae_linear_z": reconstruction_mae_z,
+    "reconstruction_rmse_linear_z": reconstruction_rmse_z,
+    "reconstruction_mae_dbz_equivalent": linear_z_to_dbz(reconstruction_mae_z),
+    "reconstruction_rmse_dbz_equivalent": linear_z_to_dbz(reconstruction_rmse_z),
+}
+METRICS.parent.mkdir(parents=True, exist_ok=True)
+METRICS.write_text(json.dumps(results, indent=2), encoding="utf-8")
+
+
 print(
     f"Forecast MAE:       {forecast_mae_z:.3e} linear Z "
     f"({linear_z_to_dbz(forecast_mae_z):.2f} dBZ equivalent)"
 )
+print(f"Metrics: {METRICS.resolve()}")
 print(
     f"Forecast RMSE:      {forecast_rmse_z:.3e} linear Z "
     f"({linear_z_to_dbz(forecast_rmse_z):.2f} dBZ equivalent)"

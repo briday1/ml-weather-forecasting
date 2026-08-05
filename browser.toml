@@ -1,0 +1,19 @@
+[browser]
+title = "ML Weather Forecasting"
+subtitle = "Browse KTLX embedding and forecast validation results"
+
+[[workspaces]]
+use = "scripts.sigvue_workspace:create_workspace"
+path = "."
+id = "ml-weather-forecasting"
+name = "ML Weather Forecasting"
+flatten_discovery = false
+
+[workspaces.config]
+dataset = "./data/datasets/ktlx-reflectivity-120km-2016-2025-v1"
+autoencoder = "./outputs/autoencoder.pt"
+model = "./outputs/model.pt"
+output_root = "./outputs/gifs"
+experiments_root = "./outputs"
+device = "auto"
+gif_frame_duration_ms = 250

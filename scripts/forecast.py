@@ -3,17 +3,22 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
 import torch
-from model import ForecastModel
+
+try:
+    from .model import ForecastModel
+except ImportError:  # Support direct execution from the scripts directory.
+    from model import ForecastModel
 from torch.utils.data import DataLoader, Dataset
 
 LOWER_DBZ = -32.0
 UPPER_DBZ = 95.0
-TENSOR_NAME = "cartesian-z-64x64.npy"
+TENSOR_NAME = os.environ.get("ML_WEATHER_TENSOR", "cartesian-z-64x64.npy")
 MAX_LINEAR_Z = 10.0 ** (UPPER_DBZ / 10.0)
 MIN_DISPLAY_Z = 10.0 ** (LOWER_DBZ / 10.0)
 LOG_LINEAR_Z_MAX = float(np.log1p(MAX_LINEAR_Z))
@@ -44,9 +49,11 @@ class RadarSequences(Dataset):
         return radar, torch.from_numpy(self.auxiliary[int(self.indexes[position])])
 
 
-def load_data(dataset: Path) -> tuple[np.ndarray, np.ndarray]:
+def load_data(
+    dataset: Path, tensor_name: str = TENSOR_NAME
+) -> tuple[np.ndarray, np.ndarray]:
     """Open the generated tensor and return it with its usable row indexes."""
-    tensor_path = dataset / "tensors" / TENSOR_NAME
+    tensor_path = dataset / "tensors" / tensor_name
     metadata_path = tensor_path.with_suffix(".json")
     if not tensor_path.is_file() or not metadata_path.is_file():
         raise FileNotFoundError(
@@ -56,20 +63,26 @@ def load_data(dataset: Path) -> tuple[np.ndarray, np.ndarray]:
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     failed = set(metadata.get("failed_examples", {}))
     indexes = np.array(
-        [i for i, identifier in enumerate(metadata["examples"]) if identifier not in failed],
+        [
+            i
+            for i, identifier in enumerate(metadata["examples"])
+            if identifier not in failed
+        ],
         dtype=np.int64,
     )
     return radar, indexes
 
 
-def load_auxiliary(dataset: Path, input_frames: int) -> np.ndarray:
+def load_auxiliary(
+    dataset: Path, input_frames: int, tensor_name: str = TENSOR_NAME
+) -> np.ndarray:
     """Build calendar plus observed and forecast cadence features."""
     manifest = json.loads((dataset / "dataset.json").read_text(encoding="utf-8"))
     by_identifier = {example["identifier"]: example for example in manifest["examples"]}
     tensor_metadata = json.loads(
-        (dataset / "tensors" / TENSOR_NAME).with_suffix(".json").read_text(
-            encoding="utf-8"
-        )
+        (dataset / "tensors" / tensor_name)
+        .with_suffix(".json")
+        .read_text(encoding="utf-8")
     )
     rows = []
     for identifier in tensor_metadata["examples"]:
@@ -81,9 +94,9 @@ def load_auxiliary(dataset: Path, input_frames: int) -> np.ndarray:
         hour = last.hour + last.minute / 60.0 + last.second / 3600.0
         day = last.timetuple().tm_yday - 1 + hour / 24.0
         future = times[input_frames:]
-        forecast_intervals = np.diff(
-            [last.timestamp(), *[time.timestamp() for time in future]]
-        ) / 60.0
+        forecast_intervals = (
+            np.diff([last.timestamp(), *[time.timestamp() for time in future]]) / 60.0
+        )
         rows.append(
             [
                 np.sin(2 * np.pi * hour / 24.0),
@@ -107,7 +120,9 @@ def split_indexes(
     indexes: np.ndarray, seed: int, limit: int | None = None
 ) -> dict[str, np.ndarray]:
     """Make the reproducible 70/15/15 split used by every stage."""
-    selected = indexes[: min(limit, len(indexes))] if limit is not None else indexes.copy()
+    selected = (
+        indexes[: min(limit, len(indexes))] if limit is not None else indexes.copy()
+    )
     if len(selected) < 3:
         raise ValueError("At least three usable examples are required")
     np.random.default_rng(seed).shuffle(selected)
@@ -125,8 +140,10 @@ def split_indexes(
 
 def choose_device(requested: str = "auto") -> torch.device:
     if requested == "auto":
-        requested = "mps" if torch.backends.mps.is_available() else (
-            "cuda" if torch.cuda.is_available() else "cpu"
+        requested = (
+            "mps"
+            if torch.backends.mps.is_available()
+            else ("cuda" if torch.cuda.is_available() else "cpu")
         )
     if requested == "mps" and not torch.backends.mps.is_available():
         raise RuntimeError("Apple Metal (MPS) is unavailable")
@@ -213,9 +230,7 @@ def histogram_progression_loss(
     ).mean(dim=(-2, -1))
     # Square root expands rare high-reflectivity coverage so small storm cores
     # are not numerically drowned out by broad weak-echo coverage.
-    difference = torch.sqrt(predicted_curve + 1e-6) - torch.sqrt(
-        target_curve + 1e-6
-    )
+    difference = torch.sqrt(predicted_curve + 1e-6) - torch.sqrt(target_curve + 1e-6)
     threshold_weights = prediction.new_tensor([1, 1, 1, 2, 4, 6])
     return (difference.square() * threshold_weights[None, None]).mean()
 
@@ -285,8 +300,7 @@ def histogram_divergence_loss(
         ]
     )
     reconstructed_coverage = torch.sigmoid(
-        (reconstruction[:, :, None] - thresholds[None, None, :, None, None])
-        / 0.02
+        (reconstruction[:, :, None] - thresholds[None, None, :, None, None]) / 0.02
     ).mean(dim=(-2, -1))
     actual_coverage = torch.sigmoid(
         (target[:, :, None] - thresholds[None, None, :, None, None]) / 0.02
@@ -302,9 +316,7 @@ def histogram_divergence_loss(
     return (full_js + strong_echo_js + 2.0 * coverage_error).mean()
 
 
-def loader(
-    radar, indexes, batch_size, *, auxiliary=None, shuffle=False, seed=0
-):
+def loader(radar, indexes, batch_size, *, auxiliary=None, shuffle=False, seed=0):
     generator = torch.Generator().manual_seed(seed) if shuffle else None
     return DataLoader(
         RadarSequences(radar, indexes, auxiliary),
@@ -323,7 +335,11 @@ def run_epoch(model, batches, device, input_frames, optimizer=None) -> float:
         for batch in batches:
             radar_batch, auxiliary = batch
             features, targets, mask = sequence_tensors(radar_batch, input_frames)
-            features, targets, mask = features.to(device), targets.to(device), mask.to(device)
+            features, targets, mask = (
+                features.to(device),
+                targets.to(device),
+                mask.to(device),
+            )
             auxiliary = auxiliary.to(device)
             if optimizer is not None:
                 optimizer.zero_grad(set_to_none=True)

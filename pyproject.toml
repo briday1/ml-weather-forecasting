@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ml-weather-forecasting"
+version = "0.1.0"
+description = "KTLX radar embedding and forecast validation in SigVue"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24",
+    "pillow>=10",
+    "plotly>=5.20",
+    "requests>=2.31",
+    "sigvue>=2026.72",
+    "torch>=2.2",
+]
+
+[project.scripts]
+ml-weather-forecasting = "scripts.ml_weather_forecasting:main"
+
+[project.entry-points."sigvue.workspaces"]
+ml-weather-forecasting = "scripts.sigvue_workspace:create_workspace"
+
+[tool.setuptools]
+packages = ["scripts"]

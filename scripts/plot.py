@@ -1,6 +1,7 @@
 """Stage 5 — compare validation truth with learned forecasts."""
 
 import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -8,8 +9,8 @@ import torch
 from forecast import (
     TENSOR_NAME,
     choose_device,
-    load_checkpoint,
     load_auxiliary,
+    load_checkpoint,
     load_data,
     normalized_to_dbz,
     sequence_tensors,
@@ -17,10 +18,12 @@ from forecast import (
 from radar_explorer import write_radar_comparison
 
 DATASET = Path("data/datasets/ktlx-reflectivity-120km-2016-2025-v1")
-MODEL = Path("outputs/model.pt")
-OUTPUT = Path("outputs/validation-explorer.html")
-VALIDATION_EXAMPLES = 20
-DEVICE = "auto"
+MODEL = Path(os.environ.get("ML_WEATHER_MODEL", "outputs/model.pt"))
+OUTPUT = Path(
+    os.environ.get("ML_WEATHER_VALIDATION_REPORT", "outputs/validation-explorer.html")
+)
+VALIDATION_EXAMPLES = 50
+DEVICE = os.environ.get("ML_WEATHER_DEVICE", "auto")
 
 device = choose_device(DEVICE)
 checkpoint, model = load_checkpoint(MODEL, device)
@@ -37,7 +40,9 @@ metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
 labels = [metadata["examples"][int(index)] for index in indexes]
 truth, forecast = [], []
 for index in indexes:
-    example = torch.from_numpy(np.array(radar[int(index)], dtype=np.float32)).unsqueeze(0)
+    example = torch.from_numpy(np.array(radar[int(index)], dtype=np.float32)).unsqueeze(
+        0
+    )
     features, targets, _ = sequence_tensors(example, checkpoint["input_frames"])
     with torch.inference_mode():
         context = torch.from_numpy(auxiliary[int(index)]).unsqueeze(0).to(device)
